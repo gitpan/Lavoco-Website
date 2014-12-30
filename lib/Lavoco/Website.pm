@@ -2,7 +2,6 @@ package Lavoco::Website;
 
 use 5.006;
 
-
 use Moose;
 
 use Data::Dumper;
@@ -26,11 +25,11 @@ Lavoco::Website - Framework to run a tiny website, controlled by a json config f
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 $VERSION = eval $VERSION;
 
@@ -42,8 +41,6 @@ Runs a FastCGI web-app for serving Template::Toolkit templates.
  
  use strict;
  use warnings;
- 
- use lib 'lib';
  
  use Lavoco::Website;
  
@@ -73,8 +70,8 @@ has name      => ( is => 'rw', isa => 'Str',  default => 'Website' );
 has dev       => ( is => 'rw', isa => 'Bool', lazy => 1, builder => '_build_dev' );
 has processes => ( is => 'rw', isa => 'Int',  default => 5 );
 has base      => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_base' );
-has pid       => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_pid' );
-has socket    => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_socket' );
+has _pid       => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__pid' );
+has _socket    => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__socket' );
 has templates => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_templates' );
 
 sub _build_dev
@@ -91,18 +88,18 @@ sub _build_base
     return $Bin;
 }
 
-sub _build_pid
+sub _build__pid
 {
     my $self = shift;
 
-    return $self->base . '/' . lc( $self->name ) . '.pid';
+    return $self->base . '/application.pid';
 }
 
-sub _build_socket
+sub _build__socket
 {
     my $self = shift;
 
-    return $self->base . '/' . lc( $self->name ) . '.sock';
+    return $self->base . '/application.sock';
 }
 
 sub _build_templates
@@ -131,14 +128,14 @@ sub stop
 
     print "Stopping pidfile if it exists...\n";
 
-    if ( ! -e $self->pid )
+    if ( ! -e $self->_pid )
     {
         print "PID file doesn't exist...\n";
         
         return;
     }
     
-    open( my $fh, "<", $self->pid ) or die "Cannot open pidfile: $!";
+    open( my $fh, "<", $self->_pid ) or die "Cannot open pidfile: $!";
 
     my @pids = <$fh>;
 
@@ -163,9 +160,9 @@ sub start
 {
     my $self = shift;
 
-    if ( -e $self->pid )
+    if ( -e $self->_pid )
     {
-        print "PID file " . $self->pid . " already exists, I think you should kill that first, or specify a new pid file with the -p option\n";
+        print "PID file " . $self->_pid . " already exists, I think you should kill that first, or specify a new pid file with the -p option\n";
         
         return $self;
     }
@@ -174,8 +171,8 @@ sub start
     
     my $server = Plack::Handler::FCGI->new(
         nproc      =>   $self->processes,
-        listen     => [ $self->socket ],
-        pid        =>   $self->pid,
+        listen     => [ $self->_socket ],
+        pid        =>   $self->_pid,
         detach     =>   1,
         proc_title =>   $self->name,
     );
