@@ -20,6 +20,7 @@ WriteMakefile(
         'DateTime'             => 0,
         'Email::Stuffer'       => 0,
         'Encode'               => 0,
+        'FCGI'                 => 0,
         'File::Slurp'          => 0,
         'FindBin'              => 0,
         'JSON'                 => 0,

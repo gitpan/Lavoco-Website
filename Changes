@@ -1,5 +1,7 @@
 Revision history for Lavoco-Website
 
+0.08    30 December 2014 - Include FCGI prerequisite.
+
 0.07    30 December 2014 - Fix circular reference.
 
 0.06    30 December 2014 - better handling of breadcrumbs.
