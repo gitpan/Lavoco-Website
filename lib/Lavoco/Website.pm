@@ -25,11 +25,11 @@ Lavoco::Website - Framework to run a tiny website, controlled by a JSON config f
 
 =head1 VERSION
 
-Version 0.08
+Version 0.09
 
 =cut
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 $VERSION = eval $VERSION;
 
@@ -39,7 +39,7 @@ Runs a FastCGI web-app for serving Template::Toolkit templates.
 
 This module is purely a personal project to control various small websites, use at your own risk.
 
- #!/usr/bin/env perl
+ #!/bin/env perl
  
  use strict;
  use warnings;
@@ -67,19 +67,21 @@ A JSON config file (named F<website.json> by default) should be placed in the ba
     ...
  }
 
-The mandetory field in the config is C<pages>, as an array of JSON objects.
+The mandetory field in the config is C<pages>, an array of JSON objects.
 
-Each C<page> object should have a C<url> and C<template> as a bare minimum.
+Each C<page> object should have a C<url> and C<template> at a bare minimum.
 
 All other fields are up to you, to fit your requirements.
 
-When a request is made, a lookup is done for a matching C<url>, and that C<page> is then selected.
+When a request is made, a lookup is done for a page matching the C<url>, the associated C<template> will be rendered.
 
-The C<page> object is available in your template.
+If no page is found, the template C<404.tt> will be rendered.
 
-It is useful to have pages within a page.
+The C<page> object is available in the templates.
 
-When a page is selected that is a sub-page, an extra key for C<parents> is included in the C<page> object as a list of the parent pages.
+It is often useful to have sub-pages, simply create a C<pages> attribute in a C<page> object.
+
+If a sub-page is selected, an extra key for C<parents> is included in the C<page> object as a list of the parent pages.
 
 This is useful for building breadcrumb links.
 

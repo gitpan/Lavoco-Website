@@ -1,46 +1,45 @@
 {
    "send_alerts_from":"The Example Website <no-reply@example.com>",
-   "send_404_alerts_to":"rob@example.com",
+   "send_404_alerts_to":"you@example.com",
+   "title":"The Example Website",
    "pages" : [
       {
-         "label" : "Home",
          "url" : "/",
+         "template" : "index.tt",
+         "label" : "Home",
          "title" : "Your online guide to the online world"
       },
       {
-         "url" : "/example",
+         "url" : "/organic",
+         "template" : "organic.tt",
          "label" : "Why Example?",
-         "pages" : [],
-         "breadcrumbs" : [
-            {
-               "url" : "/example",
-               "title" : "Why Example?"
-            }
-         ],
          "title" : "Why Example?",
          "heading" : "The Principles of Example Living"
       },
       {
          "url" : "/store",
+         "template" : "store.tt",
+         "label" : "Example Stores",
+         "title" : "Example Stores",
+         "heading":"Example Stores and Online Deals",
          "pages" : [
             {
+               "url" : "/store/examples-discounts",
+               "template" : "store.tt",
+               "label" : "Example Farms",
                "title" : "Example Discount Codes",
                "heading" : "Example Discount Codes",
-               "label" : "Example Farms",
-               "url" : "/store/examples-discounts",
                "merchant" : 1888
             },
             {
+               "url" : "/store/other",
+               "template" : "store.tt",
+               "label" : "Other Example Farms",
                "title" : "Other Discount Codes",
                "heading" : "Other Discount Codes",
-               "label" : "Other Example Farms",
-               "url" : "/store/other",
                "merchant" : 1613
             }
-         ],
-         "label" : "Example Stores",
-         "title" : "Example Stores",
-         "heading":"Example Stores and Online Deals"
+         ]
       }
    ]
 }

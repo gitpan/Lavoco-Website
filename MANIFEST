@@ -8,7 +8,7 @@ t/01-new.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
-examples/config.json
+examples/website.json
 examples/nginx.conf
 META.yml                                 Module YAML meta-data (added by MakeMaker)
 META.json                                Module JSON meta-data (added by MakeMaker)
