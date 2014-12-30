@@ -1,5 +1,5 @@
 {
-   "abstract" : "Framework to run a tiny website, controlled by a json config file and Template::Toolkit.",
+   "abstract" : "Framework to run a tiny website, controlled by a JSON config file and Template::Toolkit.",
    "author" : [
       "Rob Brown <rob@intelcompute.com>"
    ],
@@ -51,5 +51,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "0.05"
+   "version" : "0.06"
 }

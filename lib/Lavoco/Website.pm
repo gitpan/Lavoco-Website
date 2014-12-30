@@ -21,15 +21,15 @@ $Data::Dumper::Sortkeys = 1;
 
 =head1 NAME
 
-Lavoco::Website - Framework to run a tiny website, controlled by a json config file and Template::Toolkit.
+Lavoco::Website - Framework to run a tiny website, controlled by a JSON config file and Template::Toolkit.
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 $VERSION = eval $VERSION;
 
@@ -51,6 +51,37 @@ This module is purely a personal project to control various small websites, use 
  my $action = lc( $ARGV[0] );   # (start|stop|restart)
  
  $website->$action;
+
+A JSON config file (named F<website.json> by default) should be placed in the base directory of your website.
+
+ {
+    "title":"The Example Website",
+    "pages" : [
+       {
+          "url" : "/",
+          "template":"index.tt",
+          "label" : "Home",
+          "title" : "Your online guide to the example website"
+       },
+ 
+    ...
+ }
+
+The mandetory field in the config is C<pages>, as an array of JSON objects.
+
+Each C<page> object should have a C<url> and C<template> as a bare minimum.
+
+All other fields are up to you, to fit your requirements.
+
+When a request is made, a lookup is done for a matching C<url>, and that C<page> is then selected.
+
+The C<page> object is available in your template.
+
+It is useful to have pages within a page.
+
+When a page is selected that is a sub-page, an extra key for C<parents> is included in the C<page> object as a list of the parent pages.
+
+This is useful for building breadcrumb links.
 
 =cut
 
@@ -120,7 +151,9 @@ The base directory of the application, we use L<FindBin> for this.
 =head3 dev
 
 Flag to indicate whether this we're running a development instance of the website.
+
 It's on by default, and only turned off if the base directory contains C</live>.
+
 I typically use C</home/user/www.example.com/dev> and C</home/user/www.example.com/live>.
 
 =head3 processes
@@ -129,7 +162,7 @@ Number of FastCGI process to spawn, 5 by default.
 
 =head3 templates
 
-The directory containing the TT templates, by default it's C<$website-\>base . '/templates'>.
+The directory containing the TT templates, by default it's C<$website-E<gt>base . '/templates'>.
 
 =head3 start
 
@@ -304,6 +337,7 @@ sub _handler
             if ( $path eq $each_page->{ url } )
             {
                 $stash{ page } = $each_page;
+
                 last;
             }
 
@@ -314,6 +348,11 @@ sub _handler
                     if ( $path eq $each_sub_page->{ url } )
                     {
                         $stash{ page } = $each_sub_page;
+
+                        $stash{ page }->{ parents } = [];
+                        
+                        push @{ $stash{ page }->{ parents } }, $each_page;
+                        
                         last;
                     }
                 }
@@ -392,6 +431,12 @@ sub _handler
         $log->debug( "The stash contains...", \%stash );
         
         $log->debug( "Took " . sprintf("%.5f", $stash{ took } ) . " seconds");
+
+        #######################################
+        # cleanup (circular references, etc.) #
+        #######################################
+
+        delete $stash{ page }->{ parent } if exists $stash{ page };
 
         return $res->finalize;
     }
