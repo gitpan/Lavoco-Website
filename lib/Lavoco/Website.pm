@@ -25,11 +25,11 @@ Lavoco::Website - Framework to run a tiny website, controlled by a json config f
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 $VERSION = eval $VERSION;
 
@@ -44,13 +44,11 @@ Runs a FastCGI web-app for serving Template::Toolkit templates.
  
  use Lavoco::Website;
  
- my $website = Lavoco::Website->new( name => 'Organic' );
+ my $website = Lavoco::Website->new( name => 'Example' );
  
- $website->stop if $ARGV[0] =~ /(stop|restart)/i;
+ my $action = lc( $ARGV[0] );   # (start|stop|restart)
  
- sleep 1 if $ARGV[0] =~ /restart/i;
- 
- $website->start if $ARGV[0] =~ /(start|restart)/i;
+ $website->$action;
 
 =cut
 
@@ -66,13 +64,18 @@ Creates a new instance of the website object.
 
 =cut
 
-has name      => ( is => 'rw', isa => 'Str',  default => 'Website' );
-has dev       => ( is => 'rw', isa => 'Bool', lazy => 1, builder => '_build_dev' );
-has processes => ( is => 'rw', isa => 'Int',  default => 5 );
-has base      => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_base' );
+has name       => ( is => 'rw', isa => 'Str',  default => 'Website' );
+has base       => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_base' );
+has dev        => ( is => 'rw', isa => 'Bool', lazy => 1, builder => '_build_dev' );
+has processes  => ( is => 'rw', isa => 'Int',  default => 5 );
 has _pid       => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__pid' );
 has _socket    => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__socket' );
-has templates => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_templates' );
+has templates  => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_templates' );
+
+sub _build_base
+{
+    return $Bin;
+}
 
 sub _build_dev
 {
@@ -81,11 +84,6 @@ sub _build_dev
     return 0 if $self->base =~ m:/live:;
 
     return 1;
-}
-
-sub _build_base
-{
-    return $Bin;
 }
 
 sub _build__pid
@@ -113,8 +111,21 @@ sub _build_templates
 
 The identifier for the website, used as the process title.
 
-=cut
+=head3 base
 
+The base directory of the application.
+
+=head3 dev
+
+Flag to indicate whether this is we're running a development instance, it's on by default, and only turned off if the base directory contains C</live>.
+
+=head3 processes
+
+Number of FastCGI process to spawn, 5 by default.
+
+=head3 templates
+
+The directory containing the TT templates, by default it's C<$website->base . '/templates'>.
 
 =head3 start
 
@@ -180,9 +191,24 @@ sub start
     $server->run( $self->_handler );
 }
 
+=head3 restart
 
+Restarts the FastCGI daemon, with a 1 second delay between stopping and starting.
 
+=cut
 
+sub restart
+{
+    my $self = shift;
+    
+    $self->stop;
+
+    sleep 1;
+
+    $self->start;
+
+    return $self;
+}
 
 sub _handler
 {
@@ -196,10 +222,6 @@ sub _handler
 
         my $req = Plack::Request->new( shift );
 
-        my $log = Log::AutoDump->new( base_dir => $self->base . '/logs', filename => lc( $self->name ) . '.log' );
-
-        $log->debug("Started");
-
         my %stash = (
             website  => $self,
             req      => $req,
@@ -207,6 +229,10 @@ sub _handler
             start    => join( '.', gettimeofday ),
             filename => $self->base . '/config.json',
         );
+
+        my $log = Log::AutoDump->new( base_dir => $stash{ website }->base . '/logs', filename => lc( $stash{ website }->name ) . '.log' );
+
+        $log->debug("Started");
 
         ############################
         # get the config from json #
@@ -218,10 +244,7 @@ sub _handler
 
         $stash{ config } = decode_json $string;
 
-
-
-    #    write_file( $stash{ filename }, { binmode => ':utf8' }, to_json( $stash{ config }, { utf8 => 1, pretty => 1 } ) );
-
+#        write_file( $stash{ filename }, { binmode => ':utf8' }, to_json( $stash{ config }, { utf8 => 1, pretty => 1 } ) );
 
         my $path = $req->uri->path;
 
@@ -274,11 +297,8 @@ sub _handler
         # pages #
         #########
 
-        if ( $path eq '/' )
-        {
-            $stash{ template } = 'index.tt';
-        }
-        elsif ( $path =~ m:^/post: )
+
+        if ( $path =~ m:^/post: )
         {
             $stash{ template } = 'post.tt';
         }
@@ -303,6 +323,9 @@ sub _handler
             $stash{ template } = 'contact.tt';
         }
 
+        #########################################################################
+        # find a matching 'page' from the config that matches the requested url #
+        #########################################################################
 
         foreach my $each_page ( @{ $stash{ config }->{ pages } } )
         {
@@ -325,30 +348,27 @@ sub _handler
             }
         }
 
+        ############################################
+        # translate the path to a content template #
+        ############################################
 
-        ################################################
-        # translate the path to a template and content #
-        ################################################
+        $stash{ content } = 'content' . $path . '.tt';
 
-        my @parts = split( '/', $path );
+        $log->debug( "Assuming content template is: " . $stash{ content } );
 
-        shift @parts;   # first element is always empty 
-
-        push @parts, 'index' if scalar @parts == 1;
-
-        $log->debug( "Path parts are...", \@parts );
-
-        if ( $parts[ 0 ] =~ /^(organic|products|store|news)$/ )
+        if ( ! -e $stash{ website }->base . '/templates/' . $stash{ content } )
         {
-            $stash{ template } = $parts[ 0 ] . '.tt';
+            $log->debug( "File not found: " . $stash{ website }->base . '/templates/' . $stash{ content } );
 
-            $stash{ content } = $parts[ 0 ] . '/content/' . join( '/', @parts[ 1 ] ) . '.tt';
+            $stash{ content } = 'content' . $path . '/index.tt';
 
-            $log->debug( "Content file is: " . $stash{ content } );
+            $log->debug( "Content template is now: " . $stash{ content } );
 
-            if ( ! -e $self->base . '/templates/' . $stash{ content } )
+            if ( ! -e $stash{ website }->base . '/templates/' . $stash{ content } )
             {
-                $stash{ template } = '404.tt';
+                $log->debug( "Apparently no content needed" );
+
+                delete $stash{ content };
             }
         }
 
@@ -358,16 +378,16 @@ sub _handler
         # 404 #
         #######
         
-        if ( $stash{ template } eq '404.tt' )
+        if ( ! exists $stash{ page } )
         {
-            if ( $stash{ config }->{ send_404_alerts_to } )
-            {
-                Email::Stuffer->from( $stash{ config }->{ send_alerts_from } )
-                    ->to( $stash{ config }->{ send_404_alerts_to } )
-                    ->subject( "404 - " . $path )
-                    ->text_body( "404 - " . $path . "\n\nReferrer: " . ( $req->referer || 'None' ) . "\n\n" . Dumper( $req ) . "\n\n" . Dumper( \%ENV ) )
-                    ->send;
-            }
+            $stash{ page } = { template => '404.tt' };
+
+            $stash{ website }->_send_email(
+                from      => $stash{ config }->{ send_alerts_from },
+                to        => $stash{ config }->{ send_404_alerts_to },
+                subject   => "404 - " . $path,
+                text_body => "404 - " . $path . "\n\nReferrer: " . ( $req->referer || 'None' ) . "\n\n" . Dumper( $req ) . "\n\n" . Dumper( \%ENV ),
+            );
 
             $res->status( 404 );
         }
@@ -376,13 +396,13 @@ sub _handler
             $res->status( 200 );
         }
 
-        my $tt = Template->new( ENCODING => 'UTF-8', INCLUDE_PATH => $self->templates );
+        my $tt = Template->new( ENCODING => 'UTF-8', INCLUDE_PATH => $stash{ website }->templates );
 
-        $log->debug("Using template file: " . $self->templates . "/" . $stash{ template } );
+        $log->debug("Processing template: " . $stash{ website }->templates . "/" . $stash{ page }->{ template } );
 
         my $body = '';
 
-        $tt->process( $stash{ template }, \%stash, \$body ) or $log->debug( $tt->error );
+        $tt->process( $stash{ page }->{ template }, \%stash, \$body ) or $log->debug( $tt->error );
 
         $res->content_type('text/html; charset=utf-8');
 
@@ -392,6 +412,22 @@ sub _handler
 
         return $res->finalize;
     }
+}
+
+sub _send_email
+{
+    my ( $self, %args ) = @_;
+
+    if ( $args{ to } )
+    {
+        Email::Stuffer->from( $args{ from } )
+            ->to( $args{ to } )
+            ->subject( $args{ subject } )
+            ->text_body( $args{ text_body } )
+            ->send;
+    }
+
+    return $self;
 }
 
 

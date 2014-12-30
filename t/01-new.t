@@ -6,7 +6,7 @@ use Test::Exception;
 
 use Lavoco::Website;
 
-my @methods = qw( name dev processes base _pid _socket templates _handler start stop );
+my @methods = qw( name dev processes base _pid _socket templates start stop restart _handler );
 
 my $empty;
 

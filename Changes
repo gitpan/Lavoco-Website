@@ -1,6 +1,8 @@
 Revision history for Lavoco-Website
 
-0.02    30 December 2014 - Cleaning up and some example files (nginx and a config.json file)
+0.03    30 December 2014 - Deal with content templates much cleaner.
 
-0.01    30 December 2014 - First version
+0.02    30 December 2014 - Cleaning up and some example files (nginx and a config.json file).
+
+0.01    30 December 2014 - First version.
 
