@@ -25,17 +25,19 @@ Lavoco::Website - Framework to run a tiny website, controlled by a json config f
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 $VERSION = eval $VERSION;
 
 =head1 SYNOPSIS
 
 Runs a FastCGI web-app for serving Template::Toolkit templates.
+
+This module is purely a personal project to control various small websites, use at your own risk.
 
  #!/usr/bin/env perl
  
@@ -113,11 +115,13 @@ The identifier for the website, used as the process title.
 
 =head3 base
 
-The base directory of the application.
+The base directory of the application, we use L<FindBin> for this.
 
 =head3 dev
 
-Flag to indicate whether this is we're running a development instance, it's on by default, and only turned off if the base directory contains C</live>.
+Flag to indicate whether this we're running a development instance of the website.
+It's on by default, and only turned off if the base directory contains C</live>.
+I typically use C</home/user/www.example.com/dev> and C</home/user/www.example.com/live>.
 
 =head3 processes
 
@@ -125,7 +129,7 @@ Number of FastCGI process to spawn, 5 by default.
 
 =head3 templates
 
-The directory containing the TT templates, by default it's C<$website->base . '/templates'>.
+The directory containing the TT templates, by default it's C<$website-\>base . '/templates'>.
 
 =head3 start
 
@@ -226,7 +230,7 @@ sub _handler
             website  => $self,
             req      => $req,
             now      => DateTime->now,
-            start    => join( '.', gettimeofday ),
+            started  => join( '.', gettimeofday ),
             filename => $self->base . '/config.json',
         );
 
@@ -242,7 +246,11 @@ sub _handler
 
         my $string = read_file( $stash{ filename }, { binmode => ':utf8' } );
 
-        $stash{ config } = decode_json $string;
+        eval {
+            $stash{ config } = decode_json $string;
+        };
+
+        $log->debug( $@ ) if $@;
 
 #        write_file( $stash{ filename }, { binmode => ':utf8' }, to_json( $stash{ config }, { utf8 => 1, pretty => 1 } ) );
 
@@ -348,32 +356,39 @@ sub _handler
             }
         }
 
+        $log->debug( "Matching page found in config" ) if exists $stash{ page };
+
         ############################################
         # translate the path to a content template #
         ############################################
 
-        $stash{ content } = 'content' . $path . '.tt';
-
-        $log->debug( "Assuming content template is: " . $stash{ content } );
-
-        if ( ! -e $stash{ website }->base . '/templates/' . $stash{ content } )
+        if ( $stash{ page } )
         {
-            $log->debug( "File not found: " . $stash{ website }->base . '/templates/' . $stash{ content } );
+            $log->debug( "Template for page: " . $stash{ page }->{ template } );
 
-            $stash{ content } = 'content' . $path . '/index.tt';
+            $stash{ content } = 'content' . $path . '.tt';
 
-            $log->debug( "Content template is now: " . $stash{ content } );
+            $log->debug( "Trying content template: " . $stash{ content } );
 
             if ( ! -e $stash{ website }->base . '/templates/' . $stash{ content } )
             {
-                $log->debug( "Apparently no content needed" );
+                $log->debug( "File not found: " . $stash{ website }->base . '/templates/' . $stash{ content } );
 
-                delete $stash{ content };
+                $stash{ content } = 'content' . $path . ( $path =~ m:/$: ? '' : '/' ) . 'index.tt';
+
+                $log->debug( "Trying content template: " . $stash{ content } );
+
+                if ( ! -e $stash{ website }->base . '/templates/' . $stash{ content } )
+                {
+                    $log->debug( "File not found: " . $stash{ website }->base . '/templates/' . $stash{ content } );
+
+                    $log->debug( "Apparently no content needed" );
+
+                    delete $stash{ content };
+                }
             }
         }
 
-        $log->debug( "The stash contains...", \%stash );
-        
         #######
         # 404 #
         #######
@@ -408,7 +423,11 @@ sub _handler
 
         $res->body( encode( "UTF-8", $body ) );
 
-        $log->debug( "Took " . sprintf("%.5f", gettimeofday() - $stash{ start } ) . " seconds");
+        $stash{ took } = join( '.', gettimeofday ) - $stash{ started };
+        
+        $log->debug( "The stash contains...", \%stash );
+        
+        $log->debug( "Took " . sprintf("%.5f", $stash{ took } ) . " seconds");
 
         return $res->finalize;
     }
@@ -429,10 +448,6 @@ sub _send_email
 
     return $self;
 }
-
-
-
-
 
 =head1 TODO
 
