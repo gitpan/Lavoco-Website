@@ -25,11 +25,11 @@ Lavoco::Website - Framework to run a tiny website, controlled by a json config f
 
 =head1 VERSION
 
-Version 0.04
+Version 0.05
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 $VERSION = eval $VERSION;
 
@@ -92,14 +92,14 @@ sub _build__pid
 {
     my $self = shift;
 
-    return $self->base . '/application.pid';
+    return $self->base . '/website.pid';
 }
 
 sub _build__socket
 {
     my $self = shift;
 
-    return $self->base . '/application.sock';
+    return $self->base . '/website.sock';
 }
 
 sub _build_templates
@@ -147,7 +147,7 @@ sub stop
     {
         print "PID file doesn't exist...\n";
         
-        return;
+        return $self;
     }
     
     open( my $fh, "<", $self->_pid ) or die "Cannot open pidfile: $!";
@@ -214,6 +214,8 @@ sub restart
     return $self;
 }
 
+# returns a code-ref for the FCGI handler/server.
+
 sub _handler
 {
     my $self = shift;
@@ -231,26 +233,18 @@ sub _handler
             req      => $req,
             now      => DateTime->now,
             started  => join( '.', gettimeofday ),
-            filename => $self->base . '/config.json',
         );
 
-        my $log = Log::AutoDump->new( base_dir => $stash{ website }->base . '/logs', filename => lc( $stash{ website }->name ) . '.log' );
+        my $log = Log::AutoDump->new( base_dir => $stash{ website }->base . '/logs', filename => 'website.log' );
 
         $log->debug("Started");
 
-        ############################
-        # get the config from json #
-        ############################
+        ##################
+        # get the config #
+        ##################
 
-        $log->debug( "Opening config file: " . $stash{ filename } );
+        $stash{ config } = $stash{ website }->_get_config( log => $log );
 
-        my $string = read_file( $stash{ filename }, { binmode => ':utf8' } );
-
-        eval {
-            $stash{ config } = decode_json $string;
-        };
-
-        $log->debug( $@ ) if $@;
 
 #        write_file( $stash{ filename }, { binmode => ':utf8' }, to_json( $stash{ config }, { utf8 => 1, pretty => 1 } ) );
 
@@ -299,36 +293,6 @@ sub _handler
             $res->body( encode( "UTF-8", $sitemap ) );
 
             return $res->finalize;
-        }
-
-        #########
-        # pages #
-        #########
-
-
-        if ( $path =~ m:^/post: )
-        {
-            $stash{ template } = 'post.tt';
-        }
-        elsif ( $path =~ m:^/page: )
-        {
-            $stash{ template } = 'page.tt';
-        }
-        elsif ( $path =~ m:^/category: )
-        {
-            $stash{ template } = 'category.tt';
-        }
-        elsif ( $path =~ m:^/archives: )
-        {
-            $stash{ template } = 'archives.tt';
-        }
-        elsif ( $path =~ m:^/fullwidth: )
-        {
-            $stash{ template } = 'fullwidth.tt';
-        }
-        elsif ( $path =~ m:^/contact: )
-        {
-            $stash{ template } = 'contact.tt';
         }
 
         #########################################################################
@@ -431,6 +395,29 @@ sub _handler
 
         return $res->finalize;
     }
+}
+
+sub _get_config
+{
+    my ( $self, %args ) = @_;
+
+    my $log = $args{ log };    
+
+    my $filename = $self->base . '/website.json';
+
+    $log->debug( "Opening config file: " . $filename );
+
+    my $string = read_file( $filename, { binmode => ':utf8' } );
+
+    my $config = undef;
+
+    eval {
+        $config = decode_json $string;
+    };
+
+    $log->debug( $@ ) if $@;
+
+    return $config;
 }
 
 sub _send_email

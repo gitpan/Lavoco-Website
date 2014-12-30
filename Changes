@@ -1,5 +1,9 @@
 Revision history for Lavoco-Website
 
+0.05    30 December 2014 - More general housekeeping.
+
+0.04    30 December 2014 - Put template directive in config.
+
 0.03    30 December 2014 - Deal with content templates much cleaner.
 
 0.02    30 December 2014 - Cleaning up and some example files (nginx and a config.json file).
