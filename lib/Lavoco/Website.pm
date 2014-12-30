@@ -25,11 +25,11 @@ Lavoco::Website - Framework to run a tiny website, controlled by a JSON config f
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 $VERSION = eval $VERSION;
 
@@ -97,13 +97,13 @@ Creates a new instance of the website object.
 
 =cut
 
-has name       => ( is => 'rw', isa => 'Str',  default => 'Website' );
-has base       => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_base' );
-has dev        => ( is => 'rw', isa => 'Bool', lazy => 1, builder => '_build_dev' );
-has processes  => ( is => 'rw', isa => 'Int',  default => 5 );
-has _pid       => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__pid' );
-has _socket    => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__socket' );
-has templates  => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_templates' );
+has  name      => ( is => 'rw', isa => 'Str',  default => 'Website' );
+has  processes => ( is => 'rw', isa => 'Int',  default => 5         );
+has  base      => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_base'      );
+has  dev       => ( is => 'rw', isa => 'Bool', lazy => 1, builder => '_build_dev'       );
+has _pid       => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__pid'      );
+has _socket    => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build__socket'   );
+has  templates => ( is => 'rw', isa => 'Str',  lazy => 1, builder => '_build_templates' );
 
 sub _build_base
 {
@@ -436,7 +436,7 @@ sub _handler
         # cleanup (circular references, etc.) #
         #######################################
 
-        delete $stash{ page }->{ parent } if exists $stash{ page };
+        delete $stash{ page }->{ parents } if exists $stash{ page };
 
         return $res->finalize;
     }

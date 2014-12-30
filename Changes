@@ -1,5 +1,9 @@
 Revision history for Lavoco-Website
 
+0.07    30 December 2014 - Fix circular reference.
+
+0.06    30 December 2014 - better handling of breadcrumbs.
+
 0.05    30 December 2014 - More general housekeeping.
 
 0.04    30 December 2014 - Put template directive in config.
