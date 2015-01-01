@@ -25,11 +25,11 @@ Lavoco::Website - Framework to run a tiny website, controlled by a JSON config f
 
 =head1 VERSION
 
-Version 0.09
+Version 0.10
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 $VERSION = eval $VERSION;
 
@@ -63,17 +63,18 @@ A JSON config file (named F<website.json> by default) should be placed in the ba
           "label" : "Home",
           "title" : "Your online guide to the example website"
        },
- 
+       ...
+    ]
     ...
  }
 
-The mandetory field in the config is C<pages>, an array of JSON objects.
+The mandatory field in the config is C<pages>, an array of JSON objects.
 
 Each C<page> object should have a C<url> and C<template> at a bare minimum.
 
 All other fields are up to you, to fit your requirements.
 
-When a request is made, a lookup is done for a page matching the C<url>, the associated C<template> will be rendered.
+When a request is made, a lookup is performed for a page by matching the C<url> - the associated C<template> will be rendered.
 
 If no page is found, the template C<404.tt> will be rendered.
 
@@ -274,20 +275,15 @@ sub _handler
 
         $log->debug("Started");
 
+        my $path = $req->uri->path;
+
+        $log->debug( "Requested path: " . $path ); 
+
         ##################
         # get the config #
         ##################
 
         $stash{ config } = $stash{ website }->_get_config( log => $log );
-
-
-#        write_file( $stash{ filename }, { binmode => ':utf8' }, to_json( $stash{ config }, { utf8 => 1, pretty => 1 } ) );
-
-        my $path = $req->uri->path;
-
-        $log->debug( "Requested path: " . $path ); 
-
-        my $res = $req->new_response;
 
         ###############
         # sitemap xml #
@@ -295,39 +291,7 @@ sub _handler
 
         if ( $path eq '/sitemap.xml' )
         {
-            my $base = ($req->env->{'psgi.url_scheme'} || "http") .
-                "://" . ($req->env->{HTTP_HOST} || (($req->env->{SERVER_NAME} || "") . ":" . ($req->env->{SERVER_PORT} || 80)));
-
-            my $sitemap = '<?xml version="1.0" encoding="UTF-8"?>';
-
-            $sitemap .= "\n";
-
-            $sitemap .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">';
-
-            $sitemap .= "\n";
-
-            foreach my $each_page ( @{ $stash{ config }->{ pages } } )
-            {
-                $sitemap .= "<url><loc>" . $base . $each_page->{ url } . "</loc></url>\n";
-
-                if ( ref $each_page->{ pages } eq 'ARRAY' )
-                {
-                    foreach my $each_sub_page ( @{ $each_page->{ pages } } )
-                    {
-                        $sitemap .= "<url><loc>" . $base . $each_sub_page->{ url } . "</loc></url>\n";        
-                    }
-                }
-            }
-            
-            $sitemap .= "</urlset>\n";
-
-            $res->status(200);
-
-            $res->content_type('application/xml; charset=utf-8');
-            
-            $res->body( encode( "UTF-8", $sitemap ) );
-
-            return $res->finalize;
+            return $stash{ website }->_sitemap( log => $log, req => $req, stash => \%stash );
         }
 
         #########################################################################
@@ -363,36 +327,7 @@ sub _handler
 
         $log->debug( "Matching page found in config" ) if exists $stash{ page };
 
-        ############################################
-        # translate the path to a content template #
-        ############################################
-
-        if ( $stash{ page } )
-        {
-            $log->debug( "Template for page: " . $stash{ page }->{ template } );
-
-            $stash{ content } = 'content' . $path . '.tt';
-
-            $log->debug( "Trying content template: " . $stash{ content } );
-
-            if ( ! -e $stash{ website }->base . '/templates/' . $stash{ content } )
-            {
-                $log->debug( "File not found: " . $stash{ website }->base . '/templates/' . $stash{ content } );
-
-                $stash{ content } = 'content' . $path . ( $path =~ m:/$: ? '' : '/' ) . 'index.tt';
-
-                $log->debug( "Trying content template: " . $stash{ content } );
-
-                if ( ! -e $stash{ website }->base . '/templates/' . $stash{ content } )
-                {
-                    $log->debug( "File not found: " . $stash{ website }->base . '/templates/' . $stash{ content } );
-
-                    $log->debug( "Apparently no content needed" );
-
-                    delete $stash{ content };
-                }
-            }
-        }
+        my $res = $req->new_response;
 
         #######
         # 404 #
@@ -481,6 +416,51 @@ sub _send_email
     }
 
     return $self;
+}
+
+sub _sitemap
+{
+    my ( $self, %args ) = @_;
+
+    my $log = $args{ log };    
+    my $req = $args{ req };
+    my $stash = $args{ stash };
+
+    my $base = ($req->env->{'psgi.url_scheme'} || "http") .
+        "://" . ($req->env->{HTTP_HOST} || (($req->env->{SERVER_NAME} || "") . ":" . ($req->env->{SERVER_PORT} || 80)));
+
+    my $sitemap = '<?xml version="1.0" encoding="UTF-8"?>';
+
+    $sitemap .= "\n";
+
+    $sitemap .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">';
+
+    $sitemap .= "\n";
+
+    foreach my $each_page ( @{ $stash->{ config }->{ pages } } )
+    {
+        $sitemap .= "<url><loc>" . $base . $each_page->{ url } . "</loc></url>\n";
+
+        if ( ref $each_page->{ pages } eq 'ARRAY' )
+        {
+            foreach my $each_sub_page ( @{ $each_page->{ pages } } )
+            {
+                $sitemap .= "<url><loc>" . $base . $each_sub_page->{ url } . "</loc></url>\n";        
+            }
+        }
+    }
+    
+    $sitemap .= "</urlset>\n";
+
+    my $res = $req->new_response;
+
+    $res->status(200);
+
+    $res->content_type('application/xml; charset=utf-8');
+    
+    $res->body( encode( "UTF-8", $sitemap ) );
+
+    return $res->finalize;
 }
 
 =head1 TODO
