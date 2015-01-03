@@ -22,15 +22,17 @@ $Data::Dumper::Sortkeys = 1;
 
 =head1 NAME
 
-Lavoco::Website - EXPERIMENTAL FRAMEWORK. Framework to run small websites, URL dispatching based on a flexible config file, to render Template::Toolkit templates.
+Lavoco::Website - EXPERIMENTAL FRAMEWORK.
+
+Framework to run small websites, URL dispatching based on a flexible config file, to render Template::Toolkit templates.
 
 =head1 VERSION
 
-Version 0.11
+Version 0.12
 
 =cut
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 $VERSION = eval $VERSION;
 
@@ -56,7 +58,7 @@ This is an experimental framework to control various small websites, use at your
 
 =head3 new
 
-Creates a new instance of the website object, performs basic validation of your setup and dies if there's a problem.
+Creates a new instance of the website object.
 
 =head2 Instance Methods
 
@@ -115,15 +117,23 @@ The base directory of the application, using L<FindBin>.
 
 =head3 dev
 
-Flag to indicate whether we're running a development instance of the website.
+A simple boolean flag to indicate whether you're running a development instance of the website.
 
-It's on by default, and currently turned off if the base directory contains C</live>.
+It's on by default, and currently turned off if the base directory contains C</live>.  Feel free to set it based on your own logic before calling C<start()>.
 
 I typically use working directories such as C</home/user/www.example.com/dev> and C</home/user/www.example.com/live>.
+
+This flag is useful to disable things like Google Analytics on the dev site.
+
+The website object is avilable to all templates under the name C<website>.
+
+e.g. C<[% IF website.dev %]...>
 
 =head3 processes
 
 Number of FastCGI process to spawn, 5 by default.
+
+ $website->processes( 10 );
 
 =head3 templates
 
@@ -131,7 +141,7 @@ The directory containing the TT templates, by default it's C<$website-E<gt>base 
 
 =head3 start
 
-Starts the FastCGI daemon.
+Starts the FastCGI daemon.  Performs basic checks of your environment and dies if there's a problem.
 
 =cut
 
@@ -376,7 +386,9 @@ sub restart
 
 =head1 CONFIG
 
-A JSON config file named website.json should be placed in the base directory of your website.
+Currently only JSON is supported, the config file should be named C<website.json> and should be placed in the base directory of your website.
+
+See the C<examples> directory for a sample JSON config file.
 
  {
     "pages" : [
@@ -393,17 +405,17 @@ A JSON config file named website.json should be placed in the base directory of 
     ...
  }
 
-The entire config hash is available in all templates, and is flexible, there are only a couple of mandatory/reserved attributes.
+The entire config hash is available in all templates via [% config %], and is flexible, there are only a couple of mandatory/reserved attributes.
 
-The mandatory field in the config is C<pages>, an array of JSON objects.
+The mandatory field in the config is C<pages>, which is an array of JSON objects.
 
-Each C<page> object should have a C<path> (URL) and C<template>.
+Each C<page> object should have a C<path> (to match a URL) and C<template>.
 
 All other fields are up to you, to fit your requirements.
 
 When a request is made, a lookup is performed for a page by matching the C<path> - the associated C<template> will be rendered.
 
-If no page is found, the template C<404.tt> will be rendered.
+If no page is found, the template C<404.tt> will be rendered, make sure you have this file ready in the templates directory.
 
 The C<page> object is available in the templates.
 
@@ -531,6 +543,51 @@ sub _handler
     }
 }
 
+sub _sitemap
+{
+    my ( $self, %args ) = @_;
+
+    my $log = $args{ log };    
+    my $req = $args{ req };
+    my $stash = $args{ stash };
+
+    my $base = ($req->env->{'psgi.url_scheme'} || "http") .
+        "://" . ($req->env->{HTTP_HOST} || (($req->env->{SERVER_NAME} || "") . ":" . ($req->env->{SERVER_PORT} || 80)));
+
+    my $sitemap = '<?xml version="1.0" encoding="UTF-8"?>';
+
+    $sitemap .= "\n";
+
+    $sitemap .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">';
+
+    $sitemap .= "\n";
+
+    foreach my $each_page ( @{ $stash->{ config }->{ pages } } )
+    {
+        $sitemap .= "<url><loc>" . $base . $each_page->{ path } . "</loc></url>\n";
+
+        if ( ref $each_page->{ pages } eq 'ARRAY' )
+        {
+            foreach my $each_sub_page ( @{ $each_page->{ pages } } )
+            {
+                $sitemap .= "<url><loc>" . $base . $each_sub_page->{ path } . "</loc></url>\n";        
+            }
+        }
+    }
+    
+    $sitemap .= "</urlset>\n";
+
+    my $res = $req->new_response;
+
+    $res->status(200);
+
+    $res->content_type('application/xml; charset=utf-8');
+    
+    $res->body( encode( "UTF-8", $sitemap ) );
+
+    return $res->finalize;
+}
+
 sub _404
 {
     my ( $self, %args ) = @_;
@@ -609,51 +666,6 @@ sub _send_email
     }
 
     return $self;
-}
-
-sub _sitemap
-{
-    my ( $self, %args ) = @_;
-
-    my $log = $args{ log };    
-    my $req = $args{ req };
-    my $stash = $args{ stash };
-
-    my $base = ($req->env->{'psgi.url_scheme'} || "http") .
-        "://" . ($req->env->{HTTP_HOST} || (($req->env->{SERVER_NAME} || "") . ":" . ($req->env->{SERVER_PORT} || 80)));
-
-    my $sitemap = '<?xml version="1.0" encoding="UTF-8"?>';
-
-    $sitemap .= "\n";
-
-    $sitemap .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">';
-
-    $sitemap .= "\n";
-
-    foreach my $each_page ( @{ $stash->{ config }->{ pages } } )
-    {
-        $sitemap .= "<url><loc>" . $base . $each_page->{ url } . "</loc></url>\n";
-
-        if ( ref $each_page->{ pages } eq 'ARRAY' )
-        {
-            foreach my $each_sub_page ( @{ $each_page->{ pages } } )
-            {
-                $sitemap .= "<url><loc>" . $base . $each_sub_page->{ url } . "</loc></url>\n";        
-            }
-        }
-    }
-    
-    $sitemap .= "</urlset>\n";
-
-    my $res = $req->new_response;
-
-    $res->status(200);
-
-    $res->content_type('application/xml; charset=utf-8');
-    
-    $res->body( encode( "UTF-8", $sitemap ) );
-
-    return $res->finalize;
 }
 
 =head1 TODO

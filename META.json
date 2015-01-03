@@ -1,5 +1,5 @@
 {
-   "abstract" : "EXPERIMENTAL FRAMEWORK. Framework to run small websites, URL dispatching based on a flexible config file, to render Template::Toolkit templates.",
+   "abstract" : "EXPERIMENTAL FRAMEWORK.",
    "author" : [
       "Rob Brown <rob@intelcompute.com>"
    ],
@@ -53,5 +53,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "0.11"
+   "version" : "0.12"
 }

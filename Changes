@@ -1,5 +1,9 @@
 Revision history for Lavoco-Website
 
+0.12    3 January 2015 - More documentation.
+
+0.11    3 January 2015 - Better testing of environment on startup.
+
 0.10    30 December 2014 - More documentation and removed 'content' detection.
 
 0.09    30 December 2014 - Documentation and change the JSON config slightly.
