@@ -4,27 +4,27 @@
    "title":"The Example Website",
    "pages" : [
       {
-         "url" : "/",
+         "path" : "/",
          "template" : "index.tt",
          "label" : "Home",
          "title" : "Your online guide to the online world"
       },
       {
-         "url" : "/organic",
+         "path" : "/organic",
          "template" : "organic.tt",
          "label" : "Why Example?",
          "title" : "Why Example?",
          "heading" : "The Principles of Example Living"
       },
       {
-         "url" : "/store",
+         "path" : "/store",
          "template" : "store.tt",
          "label" : "Example Stores",
          "title" : "Example Stores",
          "heading":"Example Stores and Online Deals",
          "pages" : [
             {
-               "url" : "/store/examples-discounts",
+               "path" : "/store/examples-discounts",
                "template" : "store.tt",
                "label" : "Example Farms",
                "title" : "Example Discount Codes",
@@ -32,7 +32,7 @@
                "merchant" : 1888
             },
             {
-               "url" : "/store/other",
+               "path" : "/store/other",
                "template" : "store.tt",
                "label" : "Other Example Farms",
                "title" : "Other Discount Codes",

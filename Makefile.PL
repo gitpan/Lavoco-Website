@@ -28,6 +28,7 @@ WriteMakefile(
         'Plack::Handler::FCGI' => 0,
         'Plack::Request'       => 0,
         'Template'             => 0,
+        'Term::ANSIColor'      => 0,
         'Time::HiRes'          => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },

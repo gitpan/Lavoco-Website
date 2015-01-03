@@ -15,35 +15,31 @@ use Log::AutoDump;
 use Plack::Handler::FCGI;
 use Plack::Request;
 use Template;
+use Term::ANSIColor;
 use Time::HiRes qw(gettimeofday);
 
 $Data::Dumper::Sortkeys = 1;
 
 =head1 NAME
 
-Lavoco::Website - Framework to run a tiny website, controlled by a JSON config file and Template::Toolkit.
+Lavoco::Website - EXPERIMENTAL FRAMEWORK. Framework to run small websites, URL dispatching based on a flexible config file, to render Template::Toolkit templates.
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =cut
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 $VERSION = eval $VERSION;
 
 =head1 SYNOPSIS
 
-Runs a FastCGI web-app for serving Template::Toolkit templates.
+A FastCGI web-app for serving Template::Toolkit templates.
 
-This module is purely a personal project to control various small websites, use at your own risk.
+This is an experimental framework to control various small websites, use at your own risk.
 
- #!/bin/env perl
- 
- use strict;
- use warnings;
- 
  use Lavoco::Website;
  
  my $website = Lavoco::Website->new( name => 'Example' );
@@ -51,40 +47,6 @@ This module is purely a personal project to control various small websites, use 
  my $action = lc( $ARGV[0] );   # (start|stop|restart)
  
  $website->$action;
-
-A JSON config file (named F<website.json> by default) should be placed in the base directory of your website.
-
- {
-    "title":"The Example Website",
-    "pages" : [
-       {
-          "url" : "/",
-          "template":"index.tt",
-          "label" : "Home",
-          "title" : "Your online guide to the example website"
-       },
-       ...
-    ]
-    ...
- }
-
-The mandatory field in the config is C<pages>, an array of JSON objects.
-
-Each C<page> object should have a C<url> and C<template> at a bare minimum.
-
-All other fields are up to you, to fit your requirements.
-
-When a request is made, a lookup is performed for a page by matching the C<url> - the associated C<template> will be rendered.
-
-If no page is found, the template C<404.tt> will be rendered.
-
-The C<page> object is available in the templates.
-
-It is often useful to have sub-pages, simply create a C<pages> attribute in a C<page> object.
-
-If a sub-page is selected, an extra key for C<parents> is included in the C<page> object as a list of the parent pages.
-
-This is useful for building breadcrumb links.
 
 =cut
 
@@ -94,7 +56,7 @@ This is useful for building breadcrumb links.
 
 =head3 new
 
-Creates a new instance of the website object.
+Creates a new instance of the website object, performs basic validation of your setup and dies if there's a problem.
 
 =head2 Instance Methods
 
@@ -149,15 +111,15 @@ The identifier for the website, used as the process title.
 
 =head3 base
 
-The base directory of the application, we use L<FindBin> for this.
+The base directory of the application, using L<FindBin>.
 
 =head3 dev
 
-Flag to indicate whether this we're running a development instance of the website.
+Flag to indicate whether we're running a development instance of the website.
 
-It's on by default, and only turned off if the base directory contains C</live>.
+It's on by default, and currently turned off if the base directory contains C</live>.
 
-I typically use C</home/user/www.example.com/dev> and C</home/user/www.example.com/live>.
+I typically use working directories such as C</home/user/www.example.com/dev> and C</home/user/www.example.com/live>.
 
 =head3 processes
 
@@ -173,16 +135,208 @@ Starts the FastCGI daemon.
 
 =cut
 
+sub start
+{
+    my $self = shift;
+
+    if ( -e $self->_pid )
+    {
+        print "PID file " . $self->_pid . " already exists, I think you should kill that first, or specify a new pid file with the -p option\n";
+        
+        return $self;
+    }
+
+    $self->_init;
+
+    print "Building FastCGI engine...\n";
+    
+    my $server = Plack::Handler::FCGI->new(
+        nproc      =>   $self->processes,
+        listen     => [ $self->_socket ],
+        pid        =>   $self->_pid,
+        detach     =>   1,
+        proc_title =>   $self->name,
+    );
+    
+    $server->run( $self->_handler );
+}
+
+sub _init
+{
+    my ( $self, %args ) = @_;
+
+    ###############################
+    # make sure there's a log dir #
+    ###############################
+
+    printf( "%-50s", "Checking logs directory");
+
+    my $log_dir = $self->base . '/logs';
+
+    if ( ! -e $log_dir || ! -d $log_dir )
+    {
+        _print_red( "[ FAIL ]\n" );
+        print $log_dir . " does not exist, or it's not a folder.\nExiting...\n";
+        exit;
+    }
+
+    _print_green( "[  OK  ]\n" );
+
+    #####################################
+    # make sure there's a templates dir #
+    #####################################
+
+    printf( "%-50s", "Checking templates directory");
+
+    if ( ! -e $self->templates || ! -d $self->templates )
+    {
+        _print_red( "[ FAIL ]\n" );
+        print $self->templates . " does not exist, or it's not a folder.\nExiting...\n";
+        exit;
+    }
+
+    _print_green( "[  OK  ]\n" );
+
+    ###########################
+    # make sure 404.tt exists #
+    ###########################
+
+    printf( "%-50s", "Checking 404 template");
+
+    my $template_404_file = $self->templates . '/404.tt';
+
+    if ( ! -e $template_404_file )
+    {
+        _print_red( "[ FAIL ]\n" );
+        print $template_404_file . " does not exist.\nExiting...\n";
+        exit;
+    }
+
+    _print_green( "[  OK  ]\n" );
+
+    ########################
+    # load the config file #
+    ########################
+
+    printf( "%-50s", "Checking config");
+
+    my $config_file = $self->base . '/website.json';
+
+    if ( ! -e $config_file )
+    {
+        _print_red( "[ FAIL ]\n" );
+        print $config_file . " does not exist.\nExiting...\n";
+        exit;
+    }
+
+    my $string = read_file( $config_file, { binmode => ':utf8' } );
+
+    my $config = undef;
+
+    eval {
+        $config = decode_json $string;
+    };
+
+    if ( $@ )
+    {
+        _print_red( "[ FAIL ]\n" );
+        print "Config file error...\n" . $@ . "Exiting...\n";
+        exit;
+    }
+
+    ###################################
+    # basic checks on the config file #
+    ###################################
+
+    if ( ! $config->{ pages } )
+    {
+        _print_red( "[ FAIL ]\n" );
+        print "'pages' attribute missing at top level.\nExiting...\n";
+        exit;
+    }
+
+    if ( ref $config->{ pages } ne 'ARRAY' )
+    {
+        _print_red( "[ FAIL ]\n" );
+        print "'pages' attribute is not a list.\nExiting...\n";
+        exit;
+    }
+
+    if ( scalar @{ $config->{ pages } } == 0 )
+    {
+        _print_organge( "[ISSUE]\n" );
+        print "No 'pages' defined in config, this will result in a 404 for all requests.\n";
+    }
+
+    my %paths = ();
+
+    foreach my $each_page ( @{ $config->{ pages } } )
+    {
+        if ( ! $each_page->{ path } )
+        {
+            _print_red( "[ FAIL ]\n" );
+            print "'path' attribute missing for page..." . ( Dumper $each_page );
+            exit;
+        }
+
+        if ( ! $each_page->{ template } )
+        {
+            _print_red( "[ FAIL ]\n" );
+            print "'template' attribute missing for page..." . ( Dumper $each_page );
+            exit;
+        }
+
+        if ( exists $paths{ $each_page->{ path } } )
+        {
+            _print_red( "[ FAIL ]\n" );
+            print "Path '" . $each_page->{ path } . "' found more than once.\nExiting...\n";
+            exit;
+        }
+
+        $paths{ $each_page->{ path } } = 1;
+    }
+
+    _print_green( "[  OK  ]\n" );
+
+    return $self;
+}
+
+sub _print_green 
+{
+    my $string = shift;
+    print color 'bold green'; 
+    print $string;
+    print color 'reset';
+}
+
+sub _print_orange 
+{
+    my $string = shift;
+    print color 'bold orange'; 
+    print $string;
+    print color 'reset';
+}
+
+sub _print_red 
+{
+    my $string = shift;
+    print color 'bold red'; 
+    print $string;
+    print color 'reset';
+}
+
+=head3 stop
+
+Stops the FastCGI daemon.
+
+=cut
+
 sub stop
 {
     my $self = shift;
 
-    print "Stopping pidfile if it exists...\n";
-
     if ( ! -e $self->_pid )
     {
-        print "PID file doesn't exist...\n";
-        
         return $self;
     }
     
@@ -199,36 +353,6 @@ sub stop
     kill 15, $pids[0];
 
     return $self;
-}
-
-=head3 stop
-
-Stops the FastCGI daemon.
-
-=cut
-
-sub start
-{
-    my $self = shift;
-
-    if ( -e $self->_pid )
-    {
-        print "PID file " . $self->_pid . " already exists, I think you should kill that first, or specify a new pid file with the -p option\n";
-        
-        return $self;
-    }
-
-    print "Building FastCGI engine...\n";
-    
-    my $server = Plack::Handler::FCGI->new(
-        nproc      =>   $self->processes,
-        listen     => [ $self->_socket ],
-        pid        =>   $self->_pid,
-        detach     =>   1,
-        proc_title =>   $self->name,
-    );
-    
-    $server->run( $self->_handler );
 }
 
 =head3 restart
@@ -249,6 +373,45 @@ sub restart
 
     return $self;
 }
+
+=head1 CONFIG
+
+A JSON config file named website.json should be placed in the base directory of your website.
+
+ {
+    "pages" : [
+       {
+          "path" : "/",
+          "template":"index.tt",
+          ...
+       },
+       ...
+    ]
+    ...
+    "send_alerts_from":"The Example Website <no-reply@example.com>",
+    "send_404_alerts_to":"you@example.com",
+    ...
+ }
+
+The entire config hash is available in all templates, and is flexible, there are only a couple of mandatory/reserved attributes.
+
+The mandatory field in the config is C<pages>, an array of JSON objects.
+
+Each C<page> object should have a C<path> (URL) and C<template>.
+
+All other fields are up to you, to fit your requirements.
+
+When a request is made, a lookup is performed for a page by matching the C<path> - the associated C<template> will be rendered.
+
+If no page is found, the template C<404.tt> will be rendered.
+
+The C<page> object is available in the templates.
+
+It is often useful to have sub-pages, simply create a C<pages> attribute in a C<page> object.
+
+If a sub-page is selected, an extra key for C<parents> is included in the C<page> object as a list of the parent pages, this is useful for building breadcrumb links.
+
+=cut
 
 # returns a code-ref for the FCGI handler/server.
 
@@ -294,13 +457,13 @@ sub _handler
             return $stash{ website }->_sitemap( log => $log, req => $req, stash => \%stash );
         }
 
-        #########################################################################
-        # find a matching 'page' from the config that matches the requested url #
-        #########################################################################
+        ##########################################################################
+        # find a matching 'page' from the config that matches the requested path #
+        ##########################################################################
 
         foreach my $each_page ( @{ $stash{ config }->{ pages } } )
         {
-            if ( $path eq $each_page->{ url } )
+            if ( $path eq $each_page->{ path } )
             {
                 $stash{ page } = $each_page;
 
@@ -311,7 +474,7 @@ sub _handler
             {
                 foreach my $each_sub_page ( @{ $each_page->{ pages } } )
                 {
-                    if ( $path eq $each_sub_page->{ url } )
+                    if ( $path eq $each_sub_page->{ path } )
                     {
                         $stash{ page } = $each_sub_page;
 
@@ -327,29 +490,18 @@ sub _handler
 
         $log->debug( "Matching page found in config" ) if exists $stash{ page };
 
-        my $res = $req->new_response;
-
         #######
         # 404 #
         #######
         
         if ( ! exists $stash{ page } )
         {
-            $stash{ page } = { template => '404.tt' };
-
-            $stash{ website }->_send_email(
-                from      => $stash{ config }->{ send_alerts_from },
-                to        => $stash{ config }->{ send_404_alerts_to },
-                subject   => "404 - " . $path,
-                text_body => "404 - " . $path . "\n\nReferrer: " . ( $req->referer || 'None' ) . "\n\n" . Dumper( $req ) . "\n\n" . Dumper( \%ENV ),
-            );
-
-            $res->status( 404 );
+            return $stash{ website }->_404( log => $log, req => $req, stash => \%stash );
         }
-        else
-        {
-            $res->status( 200 );
-        }
+
+        my $res = $req->new_response;
+
+        $res->status( 200 );
 
         my $tt = Template->new( ENCODING => 'UTF-8', INCLUDE_PATH => $stash{ website }->templates );
 
@@ -377,6 +529,47 @@ sub _handler
 
         return $res->finalize;
     }
+}
+
+sub _404
+{
+    my ( $self, %args ) = @_;
+
+    my $log = $args{ log };    
+    my $req = $args{ req };
+    my $stash = $args{ stash };
+
+    $stash->{ page } = { template => '404.tt' };
+
+    if ( $stash->{ config }->{ send_alerts_from } && $stash->{ config }->{ send_404_alerts_to } )
+    {
+        $stash->{ website }->_send_email(
+            from      => $stash->{ config }->{ send_alerts_from },
+            to        => $stash->{ config }->{ send_404_alerts_to },
+            subject   => "404 - " . $req->uri,
+            text_body => "404 - " . $req->uri . "\n\nReferrer: " . ( $req->referer || 'None' ) . "\n\n" . Dumper( $req ) . "\n\n" . Dumper( \%ENV ),
+        );
+    }
+
+    my $res = $req->new_response;
+
+    $res->status( 404 );
+
+    $res->content_type('text/html; charset=utf-8');
+
+    my $tt = Template->new( ENCODING => 'UTF-8', INCLUDE_PATH => $stash->{ website }->templates );
+
+    $log->debug("Processing template: " . $stash->{ website }->templates . "/" . $stash->{ page }->{ template } );
+
+    my $body = '';
+
+    $tt->process( $stash->{ page }->{ template }, $stash, \$body ) or $log->debug( $tt->error );
+
+    $res->content_type('text/html; charset=utf-8');
+
+    $res->body( encode( "UTF-8", $body ) );
+
+    return $res->finalize;
 }
 
 sub _get_config

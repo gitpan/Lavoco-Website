@@ -1,5 +1,5 @@
 {
-   "abstract" : "Framework to run a tiny website, controlled by a JSON config file and Template::Toolkit.",
+   "abstract" : "EXPERIMENTAL FRAMEWORK. Framework to run small websites, URL dispatching based on a flexible config file, to render Template::Toolkit templates.",
    "author" : [
       "Rob Brown <rob@intelcompute.com>"
    ],
@@ -45,6 +45,7 @@
             "Plack::Handler::FCGI" : "0",
             "Plack::Request" : "0",
             "Template" : "0",
+            "Term::ANSIColor" : "0",
             "Test::Exception" : "0",
             "Test::More" : "0",
             "Time::HiRes" : "0"
@@ -52,5 +53,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "0.10"
+   "version" : "0.11"
 }
