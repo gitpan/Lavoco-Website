@@ -28,11 +28,11 @@ Framework to run small websites, URL dispatching based on a flexible config file
 
 =head1 VERSION
 
-Version 0.13
+Version 0.14
 
 =cut
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 $VERSION = eval $VERSION;
 
@@ -390,6 +390,8 @@ The app should be a simple Perl script in a folder with the following structure:
 
  app.pl         # see the synopsis
  website.json   # see below
+ website.pid    # generated, to allow stopping of the process
+ website.sock   # generated, to accept incoming FastCGI connections
      /logs
      /templates
          404.tt
@@ -398,7 +400,7 @@ The config file is read for each and every request, this makes adding new pages 
 
 Currently only JSON is supported for the config file, named C<website.json>.  This should be placed in the C<base> directory of your website.
 
-See the C<examples> directory for a sample JSON config file.
+See the C<examples> directory for a sample JSON config file, something like the following...
 
  {
     "pages" : [
@@ -415,23 +417,23 @@ See the C<examples> directory for a sample JSON config file.
     ...
  }
 
-The entire config hash is available in all templates via [% config %], there are only a couple of mandatory/reserved attributes.
+The entire config hash is available in all templates via C<[% config %]>, there are only a couple of mandatory/reserved attributes.
 
 The mandatory field in the config is C<pages>, which is an array of JSON objects.
 
-Each C<page> object should have a C<path> (to match a URL) and C<template>.
+Each C<page> object should contain a C<path> (for URL matching) and C<template> to render.
 
-All other fields are up to you, to fit your requirements.
+All other fields are completely up to you, to fit your requirements.
 
 When a request is made, a lookup is performed for a page by matching the C<path>, which then results in rendering the associated C<template>.
 
 If no page is found, the template C<404.tt> will be rendered, make sure you have this file ready in the templates directory.
 
-The C<page> object is available in the rendered template.
+The C<page> object is available in the rendered template, eg, C<[% page.path %]>
 
-It is often useful to have sub-pages, simply create a C<pages> attribute in a C<page> object.
+It is often useful to have sub-pages and categories, etc.  Simply create a C<pages> attribute in a C<page> object as another array of C<page> objects.
 
-If a sub-page is selected, an extra key for C<parents> is included in the C<page> object as a list of the parent pages, this is useful for building breadcrumb links.
+If a sub-page is matched and selected for a request, an extra key for C<parents> is included in the C<page> object as a list of the parent pages, this is useful for building breadcrumb links.
 
 =cut
 
@@ -464,10 +466,6 @@ sub _handler
 
         $log->debug( "Requested path: " . $path ); 
 
-        ##################
-        # get the config #
-        ##################
-
         $stash{ config } = $stash{ website }->_get_config( log => $log );
 
         ###############
@@ -482,6 +480,8 @@ sub _handler
         ##########################################################################
         # find a matching 'page' from the config that matches the requested path #
         ##########################################################################
+
+        # need to do proper recursion here
 
         foreach my $each_page ( @{ $stash{ config }->{ pages } } )
         {
@@ -510,7 +510,7 @@ sub _handler
             }
         }
 
-        $log->debug( "Matching page found in config" ) if exists $stash{ page };
+        $log->debug( "Matching page found in config...", $stash{ page } ) if exists $stash{ page };
 
         #######
         # 404 #
@@ -520,6 +520,10 @@ sub _handler
         {
             return $stash{ website }->_404( log => $log, req => $req, stash => \%stash );
         }
+
+        ##############################
+        # responding with a template #
+        ##############################
 
         my $res = $req->new_response;
 
@@ -537,6 +541,10 @@ sub _handler
 
         $res->body( encode( "UTF-8", $body ) );
 
+        #########
+        # stats #
+        #########
+
         $stash{ took } = join( '.', gettimeofday ) - $stash{ started };
         
         $log->debug( "The stash contains...", \%stash );
@@ -546,6 +554,8 @@ sub _handler
         #######################################
         # cleanup (circular references, etc.) #
         #######################################
+
+        # need to do deep pages too!
 
         delete $stash{ page }->{ parents } if exists $stash{ page };
 
@@ -572,6 +582,8 @@ sub _sitemap
 
     $sitemap .= "\n";
 
+    # need to do proper recursion here
+        
     foreach my $each_page ( @{ $stash->{ config }->{ pages } } )
     {
         $sitemap .= "<url><loc>" . $base . $each_page->{ path } . "</loc></url>\n";
@@ -681,6 +693,18 @@ sub _send_email
 =head1 TODO
 
 More documentation.
+
+Deep recursion for page/path lookups.
+
+Deep recursion for sitemap.
+
+Cleanup deeper recursion in pages with parents.
+
+Searching, somehow, of some set of templates.
+
+Include filename of config file in website/self object?
+
+Include content of config in website/self object?  Reload on change to be really snazzy.
 
 =head1 AUTHOR
 
