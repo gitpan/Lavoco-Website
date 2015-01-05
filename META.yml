@@ -35,4 +35,4 @@ requires:
   Test::Exception: '0'
   Test::More: '0'
   Time::HiRes: '0'
-version: '0.12'
+version: '0.13'

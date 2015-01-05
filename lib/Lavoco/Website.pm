@@ -24,15 +24,15 @@ $Data::Dumper::Sortkeys = 1;
 
 Lavoco::Website - EXPERIMENTAL FRAMEWORK.
 
-Framework to run small websites, URL dispatching based on a flexible config file, to render Template::Toolkit templates.
+Framework to run small websites, URL dispatching based on a flexible config file, rendering Template::Toolkit templates.
 
 =head1 VERSION
 
-Version 0.12
+Version 0.13
 
 =cut
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 $VERSION = eval $VERSION;
 
@@ -109,7 +109,7 @@ sub _build_templates
 
 =head3 name
 
-The identifier for the website, used as the process title.
+The identifier for the website, used as the FastCGI-process title.
 
 =head3 base
 
@@ -125,9 +125,9 @@ I typically use working directories such as C</home/user/www.example.com/dev> an
 
 This flag is useful to disable things like Google Analytics on the dev site.
 
-The website object is avilable to all templates under the name C<website>.
+The website object is available to all templates under the name C<website>.
 
-e.g. C<[% IF website.dev %]...>
+e.g. C<[% IF website.dev %] ... [% END %]>
 
 =head3 processes
 
@@ -384,9 +384,19 @@ sub restart
     return $self;
 }
 
-=head1 CONFIG
+=head1 CONFIGURATION
 
-Currently only JSON is supported, the config file should be named C<website.json> and should be placed in the base directory of your website.
+The app should be a simple Perl script in a folder with the following structure:
+
+ app.pl         # see the synopsis
+ website.json   # see below
+     /logs
+     /templates
+         404.tt
+
+The config file is read for each and every request, this makes adding new pages easy, without the need to restart the application.
+
+Currently only JSON is supported for the config file, named C<website.json>.  This should be placed in the C<base> directory of your website.
 
 See the C<examples> directory for a sample JSON config file.
 
@@ -405,7 +415,7 @@ See the C<examples> directory for a sample JSON config file.
     ...
  }
 
-The entire config hash is available in all templates via [% config %], and is flexible, there are only a couple of mandatory/reserved attributes.
+The entire config hash is available in all templates via [% config %], there are only a couple of mandatory/reserved attributes.
 
 The mandatory field in the config is C<pages>, which is an array of JSON objects.
 
@@ -413,11 +423,11 @@ Each C<page> object should have a C<path> (to match a URL) and C<template>.
 
 All other fields are up to you, to fit your requirements.
 
-When a request is made, a lookup is performed for a page by matching the C<path> - the associated C<template> will be rendered.
+When a request is made, a lookup is performed for a page by matching the C<path>, which then results in rendering the associated C<template>.
 
 If no page is found, the template C<404.tt> will be rendered, make sure you have this file ready in the templates directory.
 
-The C<page> object is available in the templates.
+The C<page> object is available in the rendered template.
 
 It is often useful to have sub-pages, simply create a C<pages> attribute in a C<page> object.
 
